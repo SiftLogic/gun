@@ -117,6 +117,85 @@ hello_pool_ws(Config) ->
 			ok
 	end || _ <- lists:seq(1, 8)].
 
+missing_pool_h1(Config) ->
+	doc("Confirm the missing pool can be used for HTTP/1.1 connections."),
+	Port = config(port, Config),
+	StartOpts = #{
+		conn_opts => #{protocols => [http]},
+		scope => ?FUNCTION_NAME
+	},
+	Opts = StartOpts#{
+		conn_opts => #{protocols => [http]},
+		scope => ?FUNCTION_NAME,
+		start_pool_if_missing => StartOpts
+	},
+	Streams = [{async, _} = gun_pool:get("/",
+		#{<<"host">> => ["localhost:", integer_to_binary(Port)]},
+		Opts
+	) || _ <- lists:seq(1, 8)],
+	_ = [begin
+		{response, nofin, 200, _} = gun_pool:await(StreamRef),
+		{ok, <<"Hello world!">>} = gun_pool:await_body(StreamRef)
+	end || {async, StreamRef} <- Streams].
+
+missing_pool_h2(Config) ->
+	doc("Confirm the missing pool can be used for HTTP/2 connections."),
+	Port = config(port, Config),
+	StartOpts = #{
+		conn_opts => #{protocols => [http2]},
+		scope => ?FUNCTION_NAME
+	},
+	Opts = StartOpts#{
+		conn_opts => #{protocols => [http2]},
+		scope => ?FUNCTION_NAME,
+		start_pool_if_missing => StartOpts
+	},
+	Streams = [{async, _} = gun_pool:get("/",
+		#{<<"host">> => ["localhost:", integer_to_binary(Port)]},
+		Opts
+	) || _ <- lists:seq(1, 800)],
+	_ = [begin
+		{response, nofin, 200, _} = gun_pool:await(StreamRef),
+		{ok, <<"Hello world!">>} = gun_pool:await_body(StreamRef)
+	end || {async, StreamRef} <- Streams].
+
+missing_pool_ws(Config) ->
+	doc("Confirm the missing pool can be used for HTTP/1.1 connections upgraded to Websocket."),
+	Port = config(port, Config),
+	StartOpts = #{
+		conn_opts => #{
+			protocols => [http],
+			ws_opts => #{
+				default_protocol => pool_ws_handler,
+				user_opts => self()
+			}
+		},
+		scope => ?FUNCTION_NAME,
+		setup_fun => {fun
+						  (ConnPid, {gun_up, _, http}, SetupState) ->
+							  _ = gun:ws_upgrade(ConnPid, "/ws"),
+							  {setup, SetupState};
+						  (_, {gun_upgrade, _, StreamRef, _, _}, _) ->
+							  {up, ws, #{ws => StreamRef}};
+						  (ConnPid, Msg, SetupState) ->
+							  ct:pal("Unexpected setup message for ~p: ~p", [ConnPid, Msg]),
+							  {setup, SetupState}
+					  end, undefined}
+	},
+	Opts = StartOpts#{
+		start_pool_if_missing => StartOpts
+	},
+	_ = [gun_pool:ws_send({text, <<"Hello world!">>}, Opts#{
+		authority => ["localhost:", integer_to_binary(Port)],
+		scope => ?FUNCTION_NAME
+	}) || _ <- lists:seq(1, 8)],
+	%% The pool_ws_handler module sends frames back to us.
+	_ = [receive
+		{text, <<"Hello world!">>} ->
+			ok
+	end || _ <- lists:seq(1, 8)].
+
+
 max_streams_h1(Config) ->
 	doc("Confirm requests are rejected when the maximum number "
 		"of streams is reached for HTTP/1.1 connections."),
