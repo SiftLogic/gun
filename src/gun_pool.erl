@@ -375,6 +375,8 @@ request(Method, Path, Headers, Body, ReqOpts) ->
 
 %% We require the host to be given in the headers for the time being.
 %% @todo Allow passing it in options. Websocket send already does that.
+authority(#{<<"authority">> := Authority}) ->
+	Authority;
 authority(#{<<"host">> := Authority}) ->
 	Authority;
 authority(Headers) ->
@@ -409,8 +411,8 @@ get_pool(Authority0, ReqOpts) ->
 
 start_missing_pool({Host, Port}, Opts) ->
 	case start_pool(Host, Port, Opts) of
-                {error, {error, {pool_exists, ManagerPid}}} ->
-                        ManagerPid;
+		{error, {error, {pool_exists, ManagerPid}}} ->
+			ManagerPid;
 		{error, {pool_exists, ManagerPid}} ->
 			ManagerPid;
 		{ok, ManagerPid} ->
