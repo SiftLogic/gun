@@ -394,7 +394,7 @@ get_pool(Authority0, ReqOpts) ->
 	Scope = maps:get(scope, ReqOpts, default),
 	case ets:lookup(gun_pools, {Scope, Authority}) of
 		[] when is_map(StartPoolIfMissing) ->
-			ManagerPid = start_missing_pool(Authority, StartPoolIfMissing),
+			ManagerPid = start_missing_pool(Authority, StartPoolIfMissing#{<<"authority">> => Authority}),
 			%% If the pool is started dynamically we need it to be ready
 			%% in order to perform the call so an await_up is forced
 			await_up(ManagerPid),
@@ -560,7 +560,8 @@ init({Host, Port, Opts}) ->
 
 gun_pools_key(Host, Port, Opts) ->
 	Transport = maps:get(transport, Opts, gun:default_transport(Port)),
-	Authority = gun_http:host_header(Transport, Host, Port),
+	Authority0 = authority(Opts),
+	Authority = gun_http:host_header(Transport, Authority0, Port),
 	Scope = maps:get(scope, Opts, default),
 	{Scope, iolist_to_binary(Authority)}.
 
